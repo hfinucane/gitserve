@@ -84,6 +84,10 @@ func lstree(commit string) ([]GitObject, error) {
 
 func get_object(starting_hash, final_path string) ([]byte, error) {
 	objects, err := lstree(starting_hash)
+	if err != nil {
+		return nil, err
+	}
+
 	next_prefix, rest := path.Split(final_path)
 	for _, object := range objects {
 		fmt.Println(next_prefix, object.Name)
@@ -100,7 +104,7 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 			}
 		}
 	}
-	return []byte{}, err
+	return nil, errors.New("file not found in tree")
 }
 
 func main() {

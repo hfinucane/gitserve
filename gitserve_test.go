@@ -21,3 +21,14 @@ func TestDisplayingObject(t *testing.T) {
 		t.Errorf("%s came back- not %s\n", first_file_calculated_md5, md5_of_starting_file)
 	}
 }
+
+func TestDisplayingMissingObject(t *testing.T) {
+	first_commit, err := get_object(starting_hash, "quack")
+
+	if err == nil {
+		t.Error("This should be an error- this is not a legit file")
+	}
+	if first_commit != nil {
+		t.Errorf("What are you doing returning content here? '%q'", first_commit)
+	}
+}
