@@ -57,8 +57,6 @@ func lstree(commit string) ([]GitObject, error) {
 		fmt.Println("command failed with ", err)
 		return nil, err
 	}
-	//	output, err := ioutil.ReadAll(stdout)
-	//	fmt.Println(string(output))
 	buf_stdout := bufio.NewReader(stdout)
 
 	var obs []GitObject
@@ -86,23 +84,18 @@ func lstree(commit string) ([]GitObject, error) {
 
 func get_object(starting_hash, final_path string) ([]byte, error) {
 	objects, err := lstree(starting_hash)
-	fmt.Println("final path", final_path)
 	next_prefix, rest := path.Split(final_path)
 	for _, object := range objects {
 		fmt.Println(next_prefix, object.Name)
 		if object.Name == next_prefix {
 			if object.ObjectType == GitTree {
 				return get_object(object.Hash, rest)
-			} else if object.ObjectType == GitBlob {
-				fmt.Println("busted")
-				return []byte("Found it"), nil
 			} else {
 				// XXX let's do a better job here
 				return nil, errors.New("Unsupported object type")
 			}
 		} else if object.Name == rest {
 			if object.ObjectType == GitBlob {
-				fmt.Println("rly found it")
 				return git_show(object.Hash)
 			}
 		}
