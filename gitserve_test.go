@@ -32,3 +32,14 @@ func TestDisplayingMissingObject(t *testing.T) {
 		t.Errorf("What are you doing returning content here? '%q'", first_commit)
 	}
 }
+
+func TestDisplayingBadRoot(t *testing.T) {
+	first_commit, err := get_object("invalid_hash", "gitserve.go")
+
+	if err == nil {
+		t.Error("This should be an error- this is not a legit hash")
+	}
+	if first_commit != nil {
+		t.Errorf("What are you doing returning content here? '%q'", first_commit)
+	}
+}
