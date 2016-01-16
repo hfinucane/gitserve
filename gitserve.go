@@ -6,11 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 type GitObjectType string
@@ -105,6 +107,21 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 		}
 	}
 	return nil, errors.New("file not found in tree")
+}
+
+func servePath(writer http.ResponseWriter, request *http.Request) {
+	path_components := strings.Split(request.URL.Path, "/")
+	if path_components[0] != "" || path_components[1] != "blob" {
+		writer.WriteHeader(http.StatusNotFound)
+		return
+	}
+	blob, err := get_object(path_components[2], strings.Join(path_components[3:], "/"))
+	if err != nil {
+		fmt.Fprint(writer, err)
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprint(writer, string(blob))
 }
 
 func main() {
