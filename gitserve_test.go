@@ -24,6 +24,40 @@ func TestDisplayingObject(t *testing.T) {
 	}
 }
 
+func TestGetHumanNames(t *testing.T) {
+	// `git show-ref --abbrev` is going to be the source of this data
+	// take off the leading 'refs/', and use the rest as the list of object sources
+	// means the data source can be fed via `git fetch` (shows up under 'remotes')
+	// or `git push` (data shows up under 'heads'). As long as the user is consistent,
+	// and there's an interface to list refs, everything should be pretty reasonable,
+	// though it's less concise, than, say, github's url structure (they can cheat &
+	// require `git push`)
+	var refs []string
+	refs, err := get_refs()
+
+	// Check that existing tags exist
+	// Check that remotes/origin/master exists
+	// This *is* a little dependent on where you get this from,
+	// so maybe I should build a little dedicated demo submodule ...
+	var rooted_tag, zeroth_version_tag, remote_master_branch bool = false, false, false
+	for _, ref := range refs {
+		if ref == "remotes/origin/master" {
+			remote_master_branch = true
+		} else if ref == "tags/0.0.0.0.1" {
+			zeroth_version_tag = true
+		} else if ref == "tags/rooted/tags/are/tricky" {
+			rooted_tag = true
+		}
+	}
+	if !rooted_tag {
+		t.Error("didn't find rooted/tags/are/tricky")
+	} else if !zeroth_version_tag {
+		t.Error("didn't find tags/0.0.0.0.1")
+	} else if !remote_master_branch {
+		t.Error("didn't find remotes/origin/master- this can be checkout dependent, sorry for the flaky test")
+	}
+}
+
 func TestDisplayingMissingObject(t *testing.T) {
 	first_commit, err := get_object(starting_hash, "quack")
 
