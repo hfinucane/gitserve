@@ -25,7 +25,7 @@ func TestDisplayingObject(t *testing.T) {
 }
 
 func TestGetHumanNames(t *testing.T) {
-	// `git show-ref --abbrev` is going to be the source of this data
+	// `git show-ref` is going to be the source of this data
 	// take off the leading 'refs/', and use the rest as the list of object sources
 	// means the data source can be fed via `git fetch` (shows up under 'remotes')
 	// or `git push` (data shows up under 'heads'). As long as the user is consistent,
