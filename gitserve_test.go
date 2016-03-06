@@ -34,6 +34,9 @@ func TestGetHumanNames(t *testing.T) {
 	// require `git push`)
 	var refs []string
 	refs, err := get_refs()
+	if err != nil {
+		t.Error(err)
+	}
 
 	// Check that existing tags exist
 	// Check that remotes/origin/master exists

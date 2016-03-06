@@ -46,6 +46,30 @@ func git_show(hash string) ([]byte, error) {
 	return ioutil.ReadAll(stdout)
 }
 
+func get_refs() ([]string, error) {
+	var refs []string
+	refs_cmd := exec.Command("git", "show-ref")
+	stdout, err := refs_cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	refs_cmd.Start()
+	// Should consider hoisting this
+	refs_r, err := regexp.Compile("^([0-9a-f]{40})\\s+(.+)")
+	if err != nil {
+		return nil, err
+	}
+	buf_stdout := bufio.NewReader(stdout)
+	for line, err := buf_stdout.ReadBytes('\n'); err == nil; line, err = buf_stdout.ReadBytes('\n') {
+		results := refs_r.FindSubmatch(line)
+		if len(results) != 3 {
+			return nil, errors.New(fmt.Sprintf("Confused by your refs- got %d matches out of something that's supposed to have 2 fields. Line: %s Results: %q", len(results), line, results))
+		}
+		refs = append(refs, string(results[2][len("refs/"):]))
+	}
+	return refs, err
+}
+
 func lstree(commit string) ([]GitObject, error) {
 	// Inspect the cwd
 	cmd := exec.Command("git", "ls-tree", commit)
