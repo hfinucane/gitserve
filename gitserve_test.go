@@ -89,27 +89,22 @@ func TestHttpBlobApi(t *testing.T) {
 	// probably should dump a list of all branches & tags, do a 'startswith'
 	// on the incoming string, and if it matches up inside of '/'s, then use that.
 
-	// Easy case is definitely "no slashes allowed"
-	req, err := http.NewRequest("GET", "http://example.com/blob/"+starting_hash+"/gitserve.go", nil)
-	if err != nil {
-		t.Error("Test request failed", err)
-	}
-	w := httptest.NewRecorder()
-	servePath(w, req)
-	output_hash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
-	if output_hash != md5_of_starting_file {
-		t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_starting_file)
-	}
-	// Let's try it with a human-readable name
-	starting_hash = "tags/0.0.0.0.1"
-	req, err = http.NewRequest("GET", "http://example.com/blob/"+starting_hash+"/gitserve.go", nil)
-	if err != nil {
-		t.Error("Test request failed", err)
-	}
-	w = httptest.NewRecorder()
-	servePath(w, req)
-	output_hash = fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
-	if output_hash != md5_of_gitserve_at_first_tag {
-		t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_gitserve_at_first_tag)
+	for _, test_case := range []struct {
+		BlobName,
+		BlobMd5 string
+	}{
+		{starting_hash, md5_of_starting_file},            // Easy case is definitely "no slashes allowed"
+		{"tags/0.0.0.0.1", md5_of_gitserve_at_first_tag}, // Let's try it with a human-readable name
+	} {
+		req, err := http.NewRequest("GET", "http://example.com/blob/"+test_case.BlobName+"/gitserve.go", nil)
+		if err != nil {
+			t.Error("Test request failed", err)
+		}
+		w := httptest.NewRecorder()
+		servePath(w, req)
+		output_hash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
+		if output_hash != test_case.BlobMd5 {
+			t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_starting_file)
+		}
 	}
 }
