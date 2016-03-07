@@ -6,7 +6,7 @@ cut-down version of github's. Depends on git proper being installed to work.
 
 ```
 $ ./gitserve --help
-Usage of ./gogitserve:
+Usage of ./gitserve:
   -listen string
         what address to listen to (default "0.0.0.0")
   -port int
