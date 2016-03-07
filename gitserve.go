@@ -186,7 +186,8 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 func main() {
 	var git_path *string = flag.String("repo", ".", "git repo to serve")
-	var internal_path *string = flag.String("path", ".", "path to the object")
+	var address *string = flag.String("listen", "0.0.0.0", "what address to listen to")
+	var port *int = flag.Int("port", 6504, "port to listen on")
 	flag.Parse()
 
 	// Move to the git repo
@@ -204,7 +205,6 @@ func main() {
 		os.Exit(3)
 	}
 
-	blob, err := get_object("HEAD", *internal_path)
-	fmt.Println(string(blob))
-	fmt.Println(err)
+	http.HandleFunc("/blob/", servePath)
+	http.ListenAndServe(fmt.Sprintf("%s:%d", *address, *port), nil)
 }
