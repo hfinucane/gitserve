@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-var starting_hash string = "b1dc9af6f6d8d7ce5d5a0fff1cee73ae9d44c7bb"
+var starting_hash string = "2ccc62d64502f9e7f1231c5b228136d3ee0fa72c"
 var md5_of_starting_file string = "0566ec561947146909cf40192cda39ec"
 
 func TestDisplayingObject(t *testing.T) {
