@@ -10,6 +10,7 @@ import (
 
 var starting_hash string = "b1dc9af6f6d8d7ce5d5a0fff1cee73ae9d44c7bb"
 var md5_of_starting_file string = "0566ec561947146909cf40192cda39ec"
+var md5_of_gitserve_at_first_tag string = "bc01be1e5c1fbdbe31ac89ae8fb154cd"
 
 func TestDisplayingObject(t *testing.T) {
 	first_commit, err := get_object(starting_hash, "gitserve.go")
@@ -98,5 +99,17 @@ func TestHttpBlobApi(t *testing.T) {
 	output_hash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
 	if output_hash != md5_of_starting_file {
 		t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_starting_file)
+	}
+	// Let's try it with a human-readable name
+	starting_hash = "tags/0.0.0.0.1"
+	req, err = http.NewRequest("GET", "http://example.com/blob/"+starting_hash+"/gitserve.go", nil)
+	if err != nil {
+		t.Error("Test request failed", err)
+	}
+	w = httptest.NewRecorder()
+	servePath(w, req)
+	output_hash = fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
+	if output_hash != md5_of_gitserve_at_first_tag {
+		t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_gitserve_at_first_tag)
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -109,6 +110,7 @@ func lstree(commit string) ([]GitObject, error) {
 }
 
 func get_object(starting_hash, final_path string) ([]byte, error) {
+	fmt.Println("starting hash @get_object", starting_hash)
 	objects, err := lstree(starting_hash)
 	if err != nil {
 		return nil, err
@@ -133,13 +135,47 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 	return nil, errors.New("file not found in tree")
 }
 
+type Lengthwise []string
+
+func (s Lengthwise) Len() int {
+	return len(s)
+}
+func (s Lengthwise) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s Lengthwise) Less(i, j int) bool {
+	return len(s[i]) < len(s[j])
+}
+
 func servePath(writer http.ResponseWriter, request *http.Request) {
+	refs, err := get_refs()
+	if err != nil {
+		fmt.Fprint(writer, err)
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	sort.Sort(Lengthwise(refs))
+
+	// Make sure we're in the right place doing the right thing
 	path_components := strings.Split(request.URL.Path, "/")
 	if path_components[0] != "" || path_components[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
-	blob, err := get_object(path_components[2], strings.Join(path_components[3:], "/"))
+
+	var target_name = path_components[2] // IE, /blob/path_components[2]/
+	// Check if there is a human-readable ref, which may contain slashes, here
+	for _, ref := range refs {
+		if strings.HasPrefix(request.URL.Path[len("/blob/"):], ref+"/") {
+			target_name = ref
+			// Taking advantage of the fact that `refs` is sorted,
+			// and that git does not allow both foo/bar and /foo to be refs
+			break
+		}
+	}
+
+	blob, err := get_object(target_name, strings.Join(path_components[3:], "/"))
+
 	if err != nil {
 		fmt.Fprint(writer, err)
 		writer.WriteHeader(http.StatusInternalServerError)
