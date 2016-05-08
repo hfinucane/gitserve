@@ -57,7 +57,7 @@ func TestGetHumanNames(t *testing.T) {
 		}
 	}
 	if !rooted_tag {
-		t.Error("didn't find rooted/tags/are/tricky")
+		t.Error("didn't find tags/rooted/tags/are/tricky")
 	} else if !zeroth_version_tag {
 		t.Error("didn't find tags/0.0.0.0.1")
 	} else if !remote_master_branch {
@@ -94,7 +94,7 @@ func TestHttpTreeApi(t *testing.T) {
 		Blob, Path      string
 		ExpectedEntries []string
 	}{
-		{"rooted/tags/are/tricky", "/", []string{"gitserve.go", "gitserve_test.go"}},
+		{"tags/rooted/tags/are/tricky", "/", []string{"gitserve.go", "gitserve_test.go"}},
 		{"2ccc6", "/", []string{"gitserve.go"}},
 	} {
 		req, err := http.NewRequest("GET", "http://example.com/blob/"+test_case.Blob+"/", nil)
