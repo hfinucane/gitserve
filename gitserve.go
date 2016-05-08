@@ -4,9 +4,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -73,6 +75,32 @@ func get_refs() ([]string, error) {
 	return refs, err
 }
 
+func git_list(hash string) ([]byte, error) {
+	objects, err := lstree(hash)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("processing ", len(objects), "@", hash)
+	t, err := template.New("list").Parse(`<html>
+	<body>
+	<ul>
+	{{- range .}}
+	<li>{{.Name}}
+	{{- end}}
+	</ul>
+	</body>
+	</html>`)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	err = t.Execute(&buf, objects)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), err
+}
+
 func lstree(commit string) ([]GitObject, error) {
 	// Inspect the cwd
 	cmd := exec.Command("git", "ls-tree", commit)
@@ -119,6 +147,9 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 	}
 
 	next_prefix, rest := path.Split(final_path)
+	if rest == "" {
+		return git_list(starting_hash)
+	}
 	for _, object := range objects {
 		fmt.Println(next_prefix, object.Name)
 		if object.Name == next_prefix {
@@ -131,6 +162,8 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 		} else if object.Name == rest {
 			if object.ObjectType == GitBlob {
 				return git_show(object.Hash)
+			} else if object.ObjectType == GitTree {
+				return git_list(object.Hash)
 			}
 		}
 	}

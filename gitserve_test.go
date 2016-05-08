@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -83,6 +84,33 @@ func TestDisplayingBadRoot(t *testing.T) {
 	}
 	if first_commit != nil {
 		t.Errorf("What are you doing returning content here? '%q'", first_commit)
+	}
+}
+
+func TestHttpTreeApi(t *testing.T) {
+	// If you go to http://server:port/blob/master, you might hope to get a file
+	// listing instead of a 404
+	for _, test_case := range []struct {
+		Blob, Path      string
+		ExpectedEntries []string
+	}{
+		{"rooted/tags/are/tricky", "/", []string{"gitserve.go", "gitserve_test.go"}},
+		{"2ccc6", "/", []string{"gitserve.go"}},
+	} {
+		req, err := http.NewRequest("GET", "http://example.com/blob/"+test_case.Blob+"/", nil)
+		if err != nil {
+			t.Error("Test request failed", err)
+		}
+		w := httptest.NewRecorder()
+		servePath(w, req)
+
+		listing := w.Body.String()
+		t.Log("Listing: ", listing)
+		for _, entry := range test_case.ExpectedEntries {
+			if !strings.Contains(listing, entry) {
+				t.Error("Output not what we expected- missing ", entry, " from ", test_case.Path, " @ ", test_case.Blob)
+			}
+		}
 	}
 }
 
