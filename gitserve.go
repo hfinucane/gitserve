@@ -85,7 +85,7 @@ func git_list(hash string) ([]byte, error) {
 	<body>
 	<ul>
 	{{- range .}}
-	<li>{{.Name}}
+	<li><a href="{{.Name}}">{{.Name}}</a>
 	{{- end}}
 	</ul>
 	</body>
