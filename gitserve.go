@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
 	"regexp"
 	"sort"
 	"strconv"
@@ -34,6 +33,19 @@ type GitObject struct {
 	ObjectType GitObjectType
 	Hash       string
 	Name       string
+}
+
+func PathRsplit(path string) (first, rest string) {
+	if path == "" || path == "/" {
+		return "", ""
+	}
+	i := strings.Index(path, "/")
+	if i == 0 {
+		return PathRsplit(path[1:]) // Just... forget handling this
+	} else if i == -1 {
+		return path, ""
+	}
+	return path[:i], path[i+1:]
 }
 
 func git_show(hash string) ([]byte, error) {
@@ -140,26 +152,24 @@ func lstree(commit string) ([]GitObject, error) {
 }
 
 func get_object(starting_hash, final_path string) ([]byte, error) {
-	fmt.Println("starting hash @get_object", starting_hash)
+	fmt.Println("starting hash @get_object", starting_hash, " @final_path: ", final_path)
 	objects, err := lstree(starting_hash)
 	if err != nil {
 		return nil, err
 	}
 
-	next_prefix, rest := path.Split(final_path)
-	if rest == "" {
-		return git_list(starting_hash)
-	}
+	next_prefix, rest := PathRsplit(final_path)
 	for _, object := range objects {
-		fmt.Println(next_prefix, object.Name)
-		if object.Name == next_prefix {
+		next_next_prefix, _ := PathRsplit(rest)
+		fmt.Println("inner loop ", next_prefix, "rest_next", next_next_prefix, "curobname", object.Name)
+		if object.Name == next_next_prefix {
 			if object.ObjectType == GitTree {
 				return get_object(object.Hash, rest)
 			} else {
 				// XXX let's do a better job here
-				return nil, errors.New("Unsupported object type")
+				return nil, errors.New(fmt.Sprintf("Unsupported object type, ", object.ObjectType))
 			}
-		} else if object.Name == rest {
+		} else if object.Name == next_prefix {
 			if object.ObjectType == GitBlob {
 				return git_show(object.Hash)
 			} else if object.ObjectType == GitTree {
@@ -179,7 +189,21 @@ func (s Lengthwise) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 func (s Lengthwise) Less(i, j int) bool {
-	return len(s[i]) < len(s[j])
+	var i_slash_count, j_slash_count int
+	for _, c := range s[i] {
+		if c == '/' {
+			i_slash_count++
+		}
+	}
+	for _, c := range s[j] {
+		if c == '/' {
+			j_slash_count++
+		}
+	}
+	if i_slash_count != j_slash_count {
+		return i_slash_count > j_slash_count
+	}
+	return len(s[i]) > len(s[j])
 }
 
 func servePath(writer http.ResponseWriter, request *http.Request) {
@@ -191,29 +215,35 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	}
 	sort.Sort(Lengthwise(refs))
 
+	fmt.Println("all refs: ", refs)
+
 	// Make sure we're in the right place doing the right thing
 	path_components := strings.Split(request.URL.Path, "/")
+	fmt.Println("Path components", path_components)
 	if path_components[0] != "" || path_components[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	var target_name = path_components[2] // IE, /blob/path_components[2]/
+	var rest = strings.Join(path_components[3:], "/")
 	// Check if there is a human-readable ref, which may contain slashes, here
 	for _, ref := range refs {
+		fmt.Println("Checking ", ref, " against ", request.URL.Path)
 		if strings.HasPrefix(request.URL.Path[len("/blob/"):], ref+"/") {
-			target_name = ref
 			// Taking advantage of the fact that `refs` is sorted,
 			// and that git does not allow both foo/bar and /foo to be refs
+			rest = request.URL.Path[len("/blob/")+len(ref)+1:]
+			fmt.Println("Rest matched to: ", rest)
 			break
 		}
 	}
 
-	blob, err := get_object(target_name, strings.Join(path_components[3:], "/"))
+	blob, err := get_object(target_name, rest)
 
 	if err != nil {
+		writer.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(writer, err)
-		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	fmt.Fprint(writer, string(blob))

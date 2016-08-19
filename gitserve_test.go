@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"testing"
 )
@@ -14,6 +15,7 @@ import (
 var starting_hash string = "2ccc62d64502f9e7f1231c5b228136d3ee0fa72c"
 var md5_of_starting_file string = "0566ec561947146909cf40192cda39ec"
 var md5_of_gitserve_at_first_tag string = "bc01be1e5c1fbdbe31ac89ae8fb154cd"
+var md5_of_nested_testfile string = "d8e8fca2dc0f896fd7cb4cb0031ba249"
 
 func TestDisplayingObject(t *testing.T) {
 	first_commit, err := get_object(starting_hash, "gitserve.go")
@@ -87,6 +89,28 @@ func TestDisplayingBadRoot(t *testing.T) {
 	}
 }
 
+func TestPathRsplit(t *testing.T) {
+	for _, test_case := range []struct {
+		Path, OutputA, OutputB string
+	}{
+		{"foo", "foo", ""},
+		{"/foo", "foo", ""},
+		{"foo/", "foo", ""},
+		{"", "", ""},
+		{"/", "", ""},
+		{"/foo/bar/baz", "foo", "bar/baz"},
+		{"foo/bar/baz", "foo", "bar/baz"},
+	} {
+		root, branch := PathRsplit(test_case.Path)
+		if root != test_case.OutputA {
+			t.Error("root", root, "does not match", test_case.OutputA, "from", test_case.Path)
+		}
+		if branch != test_case.OutputB {
+			t.Error("branch", branch, "does not match", test_case.OutputB, "from", test_case.Path)
+		}
+	}
+}
+
 func TestHttpTreeApi(t *testing.T) {
 	// If you go to http://server:port/blob/master, you might hope to get a file
 	// listing instead of a 404
@@ -94,10 +118,10 @@ func TestHttpTreeApi(t *testing.T) {
 		Blob, Path      string
 		ExpectedEntries []string
 	}{
-		{"tags/rooted/tags/are/tricky", "/", []string{"gitserve.go", "gitserve_test.go"}},
+		{"tags/rooted/tags/may/confuse", "/", []string{"gitserve.go", "gitserve_test.go"}},
 		{"2ccc6", "/", []string{"gitserve.go"}},
 	} {
-		req, err := http.NewRequest("GET", "http://example.com/blob/"+test_case.Blob+"/", nil)
+		req, err := http.NewRequest("GET", path.Join("/blob/", test_case.Blob, test_case.Path), nil)
 		if err != nil {
 			t.Error("Test request failed", err)
 		}
@@ -105,6 +129,7 @@ func TestHttpTreeApi(t *testing.T) {
 		servePath(w, req)
 
 		listing := w.Body.String()
+		t.Log(path.Join("/blob/", test_case.Blob, test_case.Path))
 		t.Log("Listing: ", listing)
 		for _, entry := range test_case.ExpectedEntries {
 			if !strings.Contains(listing, entry) {
@@ -121,20 +146,29 @@ func TestHttpBlobApi(t *testing.T) {
 
 	for _, test_case := range []struct {
 		BlobName,
-		BlobMd5 string
+		BlobMd5,
+		Path string
 	}{
-		{starting_hash, md5_of_starting_file},            // Easy case is definitely "no slashes allowed"
-		{"tags/0.0.0.0.1", md5_of_gitserve_at_first_tag}, // Let's try it with a human-readable name
+		//{starting_hash, md5_of_starting_file, "gitserve.go"}, // Easy case is definitely "no slashes allowed"
+		{"tags/0.0.0.0.1", md5_of_gitserve_at_first_tag, "gitserve.go"}, // Let's try it with a human-readable name
+		//{"82fcd77642ac584c7debd8709b48d799d7b9fa33", md5_of_nested_testfile, "a/b/c/testfile"},
 	} {
-		req, err := http.NewRequest("GET", "http://example.com/blob/"+test_case.BlobName+"/gitserve.go", nil)
+		url := path.Join("/blob/", test_case.BlobName, test_case.Path)
+		t.Log(url)
+		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			t.Error("Test request failed", err)
 		}
 		w := httptest.NewRecorder()
 		servePath(w, req)
+		if w.Code != 200 {
+			t.Error(w.Code, w.Body.String())
+		}
 		output_hash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
 		if output_hash != test_case.BlobMd5 {
-			t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_starting_file)
+			t.Log(fmt.Sprintf("failed: %q", w.Body.String()))
+			t.Error("Output not what we expected- check ", test_case.Path, "\n\nand hashes ", output_hash, " vs ", test_case.BlobMd5)
 		}
+		t.Log("-=-=-=-==-==-=-=-=-=-=-==-==-=-==-=-")
 	}
 }
