@@ -5,6 +5,7 @@ package main
 import (
 	"crypto/md5"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -89,6 +90,48 @@ func TestDisplayingBadRoot(t *testing.T) {
 	}
 }
 
+func TestPickLongestRef(t *testing.T) {
+	ref, path, err := pick_longest_ref("master/Makefile", []string{"heads/master", "tags/1.7"})
+	if ref != "heads/master" || path != "Makefile" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/master/Makefile against ref 'master'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately picking foo out of ['heads/master', 'tags/1.7']")
+	}
+
+	ref, path, err = pick_longest_ref("foo", []string{"foo", "bar", "baz"})
+	if ref != "foo" || path != "" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/foo against ref 'foo'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately picking foo out of ['foo','bar','baz']")
+	}
+
+	ref, path, err = pick_longest_ref("foo/baz.txt", []string{"foo", "bar", "baz"})
+	if ref != "foo" || path != "baz.txt" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/foo/baz.txt against ref 'foo'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately with file name")
+	}
+
+	ref, path, err = pick_longest_ref("tags/can/have/slashes/baz.txt", []string{"tags/can/have/slashes", "tags/can", "tags"})
+	if ref != "tags/can/have/slashes" || path != "baz.txt" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/tags/can/have/slashes/baz.txt")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately with a nested ref")
+	}
+
+	ref, path, err = pick_longest_ref("do/not/eat/everything/baz.txt", []string{"do", "not", "eat"})
+	if ref != "do" || path != "not/eat/everything/baz.txt" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/do/not/eat/everything/baz.txt to 'do'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately with a non-greedy match")
+	}
+}
+
 func TestPathRsplit(t *testing.T) {
 	for _, test_case := range []struct {
 		Path, OutputA, OutputB string
@@ -118,24 +161,36 @@ func TestHttpTreeApi(t *testing.T) {
 		Blob, Path      string
 		ExpectedEntries []string
 	}{
-		{"tags/rooted/tags/may/confuse", "/", []string{"gitserve.go", "gitserve_test.go"}},
+		// XXX FIXME Check branch name root too
+		{"rooted/tags/may/confuse", "/", []string{"gitserve.go", "gitserve_test.go"}},
 		{"2ccc6", "/", []string{"gitserve.go"}},
+		{"82fcd77642", "/a", []string{"b"}},
+		{"82fcd77642", "/a/", []string{"b"}},
+		{"82fcd77642", "/a/b", []string{"c"}},
+		{"82fcd77642", "/a/b/c/", []string{"testfile"}},
 	} {
 		req, err := http.NewRequest("GET", path.Join("/blob/", test_case.Blob, test_case.Path), nil)
 		if err != nil {
-			t.Error("Test request failed", err)
+			t.Fatal("Test request failed", err)
 		}
 		w := httptest.NewRecorder()
 		servePath(w, req)
 
 		listing := w.Body.String()
 		t.Log(path.Join("/blob/", test_case.Blob, test_case.Path))
-		t.Log("Listing: ", listing)
 		for _, entry := range test_case.ExpectedEntries {
 			if !strings.Contains(listing, entry) {
-				t.Error("Output not what we expected- missing ", entry, " from ", test_case.Path, " @ ", test_case.Blob)
+				t.Fatal("Output not what we expected- missing ", entry, " from ", test_case.Path, " @ ", test_case.Blob, "got:\n", textSample(listing))
 			}
 		}
+	}
+}
+
+func textSample(incoming string) string {
+	if len(incoming) > 200 {
+		return incoming[0:200]
+	} else {
+		return incoming
 	}
 }
 
@@ -149,9 +204,9 @@ func TestHttpBlobApi(t *testing.T) {
 		BlobMd5,
 		Path string
 	}{
-		//{starting_hash, md5_of_starting_file, "gitserve.go"}, // Easy case is definitely "no slashes allowed"
+		{starting_hash, md5_of_starting_file, "gitserve.go"},            // Easy case is definitely "no slashes allowed"
 		{"tags/0.0.0.0.1", md5_of_gitserve_at_first_tag, "gitserve.go"}, // Let's try it with a human-readable name
-		//{"82fcd77642ac584c7debd8709b48d799d7b9fa33", md5_of_nested_testfile, "a/b/c/testfile"},
+		{"82fcd77642ac584c7debd8709b48d799d7b9fa33", md5_of_nested_testfile, "a/b/c/testfile"},
 	} {
 		url := path.Join("/blob/", test_case.BlobName, test_case.Path)
 		t.Log(url)
@@ -167,7 +222,8 @@ func TestHttpBlobApi(t *testing.T) {
 		output_hash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
 		if output_hash != test_case.BlobMd5 {
 			t.Log(fmt.Sprintf("failed: %q", w.Body.String()))
-			t.Error("Output not what we expected- check ", test_case.Path, "\n\nand hashes ", output_hash, " vs ", test_case.BlobMd5)
+			ioutil.WriteFile("/tmp/failed", []byte(w.Body.String()), 0644)
+			t.Error("Output not what we expected- check ", test_case.Path, "\n\nand hashes ", output_hash, " vs ", test_case.BlobMd5, " bad output sample:\n", textSample(w.Body.String()))
 		}
 		t.Log("-=-=-=-==-==-=-=-=-=-=-==-==-=-==-=-")
 	}

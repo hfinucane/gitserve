@@ -97,7 +97,7 @@ func git_list(hash string) ([]byte, error) {
 	<body>
 	<ul>
 	{{- range .}}
-	<li><a href="{{.Name}}">{{.Name}}</a>
+	<li><a href="./{{.Name}}">{{.Name}}</a>
 	{{- end}}
 	</ul>
 	</body>
@@ -158,25 +158,41 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 		return nil, err
 	}
 
+	if final_path == "" {
+		return git_list(starting_hash)
+	}
+
 	next_prefix, rest := PathRsplit(final_path)
+	fmt.Println("next_prefix ", next_prefix, " rest ", rest)
+
+	next_next_prefix, _ := PathRsplit(rest)
 	for _, object := range objects {
-		next_next_prefix, _ := PathRsplit(rest)
-		fmt.Println("inner loop ", next_prefix, "rest_next", next_next_prefix, "curobname", object.Name)
-		if object.Name == next_next_prefix {
-			if object.ObjectType == GitTree {
-				return get_object(object.Hash, rest)
-			} else {
-				// XXX let's do a better job here
-				return nil, errors.New(fmt.Sprintf("Unsupported object type, ", object.ObjectType))
+		fmt.Println("inner loop next_next_prefix", next_next_prefix, "curobname", object.Name)
+		if rest == "" { // end of the line
+			if object.Name == next_prefix {
+				if object.ObjectType == GitTree {
+					return git_list(object.Hash)
+				} else if object.ObjectType == GitBlob {
+					return git_show(object.Hash)
+				} else {
+					// XXX let's do a better job here
+					return nil, errors.New(fmt.Sprintf("Unsupported object type, ", object.ObjectType))
+				}
 			}
-		} else if object.Name == next_prefix {
-			if object.ObjectType == GitBlob {
-				return git_show(object.Hash)
-			} else if object.ObjectType == GitTree {
-				return git_list(object.Hash)
+		} else {
+			if object.Name == next_prefix {
+				if object.ObjectType == GitTree {
+					return get_object(object.Hash, rest)
+				} else if object.ObjectType == GitBlob {
+					return nil, errors.New(fmt.Sprintf("This is a directory, not an object, ", object.ObjectType, object.Hash, object.Name))
+				} else {
+					// XXX let's do a better job here
+					return nil, errors.New(fmt.Sprintf("Unsupported object type, ", object.ObjectType))
+				}
 			}
 		}
 	}
+	fmt.Printf("filenotfound, next_prefix %q rest %q\n", next_prefix, rest)
 	return nil, errors.New("file not found in tree")
 }
 
@@ -206,6 +222,35 @@ func (s Lengthwise) Less(i, j int) bool {
 	return len(s[i]) > len(s[j])
 }
 
+func stripLeadingSlash(path string) string {
+	fmt.Println("Stripping leading slash from ", path)
+	if len(path) > 1 && path[0] == '/' {
+		fmt.Println(path[1:])
+		return path[1:]
+	}
+	return path
+}
+
+func pick_longest_ref(url string, refs []string) (string, string, error) {
+	// Check if there is a human-readable ref, which may contain slashes, here
+	for _, ref := range refs {
+		if strings.HasPrefix(url, ref) {
+			return ref, stripLeadingSlash(url[len(ref):]), nil
+		}
+	}
+	// For some reason I have it in my head that it's best to test all exact
+	// matches before falling back on fuzzy ones
+	for _, ref := range refs {
+		// XXX: Is resolving branches before tags the right thing to do?
+		if strings.HasPrefix("heads/"+url, ref) {
+			return ref, stripLeadingSlash(url[len(ref)-len("heads/"):]), nil
+		} else if strings.HasPrefix("tags/"+url, ref) {
+			return ref, stripLeadingSlash(url[len(ref)-len("tags/"):]), nil
+		}
+	}
+	return "", "", errors.New(fmt.Sprintf("Could not find %q in %q", url, refs))
+}
+
 func servePath(writer http.ResponseWriter, request *http.Request) {
 	refs, err := get_refs()
 	if err != nil {
@@ -215,8 +260,6 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	}
 	sort.Sort(Lengthwise(refs))
 
-	fmt.Println("all refs: ", refs)
-
 	// Make sure we're in the right place doing the right thing
 	path_components := strings.Split(request.URL.Path, "/")
 	fmt.Println("Path components", path_components)
@@ -225,21 +268,35 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	var target_name = path_components[2] // IE, /blob/path_components[2]/
-	var rest = strings.Join(path_components[3:], "/")
-	// Check if there is a human-readable ref, which may contain slashes, here
-	for _, ref := range refs {
-		fmt.Println("Checking ", ref, " against ", request.URL.Path)
-		if strings.HasPrefix(request.URL.Path[len("/blob/"):], ref+"/") {
-			// Taking advantage of the fact that `refs` is sorted,
-			// and that git does not allow both foo/bar and /foo to be refs
-			rest = request.URL.Path[len("/blob/")+len(ref)+1:]
-			fmt.Println("Rest matched to: ", rest)
-			break
-		}
+	//var target_name = path_components[2] // IE, /blob/path_components[2]/
+	trimlen := len("/blob/")
+	//	// Check if there is a human-readable ref, which may contain slashes, here
+	//	for _, ref := range refs {
+	//		fmt.Println("Checking ", ref, " against ", request.URL.Path[trimlen:])
+	//		if strings.HasPrefix(request.URL.Path[trimlen:], ref) {
+	//			// Taking advantage of the fact that `refs` is sorted,
+	//			// and that git does not allow both foo/bar and /foo to be refs
+	//			rest = request.URL.Path[trimlen+len(ref):]
+	//			fmt.Println("Rest matched to: ", rest)
+	//			break
+	//		}
+	//	}
+
+	fmt.Printf("all refs: %q\n", refs)
+
+	// Pick from human readable refs
+	ref, path, err := pick_longest_ref(request.URL.Path[trimlen:], refs)
+
+	// If it isn't a ref, assume it's a hash literal
+	if err != nil {
+		fmt.Println("Assuming we got a hash literal- ", err)
+		ref = path_components[2]
+		path = strings.Join(path_components[3:], "/")
 	}
 
-	blob, err := get_object(target_name, rest)
+	fmt.Println("ref ", ref)
+
+	blob, err := get_object(ref, path)
 
 	if err != nil {
 		writer.WriteHeader(http.StatusNotFound)
