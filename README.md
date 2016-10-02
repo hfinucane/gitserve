@@ -25,5 +25,3 @@ curl http://localhost:6504/blob/master/README.md
 ## Errata
 
 Code is under the [MPL 2.0](https://www.mozilla.org/en-US/MPL/2.0/)
-
-[![Build Status](https://drone.io/github.com/hfinucane/gitserve/status.png)](https://drone.io/github.com/hfinucane/gitserve/latest)
