@@ -1,19 +1,25 @@
 package main
 
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 import (
 	"crypto/md5"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"strings"
 	"testing"
 )
 
 var starting_hash string = "2ccc62d64502f9e7f1231c5b228136d3ee0fa72c"
 var md5_of_starting_file string = "0566ec561947146909cf40192cda39ec"
 var md5_of_gitserve_at_first_tag string = "bc01be1e5c1fbdbe31ac89ae8fb154cd"
+var md5_of_nested_testfile string = "d8e8fca2dc0f896fd7cb4cb0031ba249"
 
 func TestDisplayingObject(t *testing.T) {
-	first_commit, err := get_object(starting_hash, "gitserve.go")
+	first_commit, err := get_object(starting_hash, "prefix", "gitserve.go")
 
 	first_file_calculated_md5 := fmt.Sprintf("%x", md5.Sum(first_commit))
 
@@ -54,7 +60,7 @@ func TestGetHumanNames(t *testing.T) {
 		}
 	}
 	if !rooted_tag {
-		t.Error("didn't find rooted/tags/are/tricky")
+		t.Error("didn't find tags/rooted/tags/are/tricky")
 	} else if !zeroth_version_tag {
 		t.Error("didn't find tags/0.0.0.0.1")
 	} else if !remote_master_branch {
@@ -63,7 +69,7 @@ func TestGetHumanNames(t *testing.T) {
 }
 
 func TestDisplayingMissingObject(t *testing.T) {
-	first_commit, err := get_object(starting_hash, "quack")
+	first_commit, err := get_object(starting_hash, "prefix", "quack")
 
 	if err == nil {
 		t.Error("This should be an error- this is not a legit file")
@@ -74,13 +80,117 @@ func TestDisplayingMissingObject(t *testing.T) {
 }
 
 func TestDisplayingBadRoot(t *testing.T) {
-	first_commit, err := get_object("invalid_hash", "gitserve.go")
+	first_commit, err := get_object("invalid_hash", "prefix", "gitserve.go")
 
 	if err == nil {
 		t.Error("This should be an error- this is not a legit hash")
 	}
 	if first_commit != nil {
 		t.Errorf("What are you doing returning content here? '%q'", first_commit)
+	}
+}
+
+func TestPickLongestRef(t *testing.T) {
+	ref, path, err := pick_longest_ref("master/Makefile", []string{"heads/master", "tags/1.7"})
+	if ref != "heads/master" || path != "Makefile" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/master/Makefile against ref 'master'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately picking foo out of ['heads/master', 'tags/1.7']")
+	}
+
+	ref, path, err = pick_longest_ref("foo", []string{"foo", "bar", "baz"})
+	if ref != "foo" || path != "" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/foo against ref 'foo'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately picking foo out of ['foo','bar','baz']")
+	}
+
+	ref, path, err = pick_longest_ref("foo/baz.txt", []string{"foo", "bar", "baz"})
+	if ref != "foo" || path != "baz.txt" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/foo/baz.txt against ref 'foo'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately with file name")
+	}
+
+	ref, path, err = pick_longest_ref("tags/can/have/slashes/baz.txt", []string{"tags/can/have/slashes", "tags/can", "tags"})
+	if ref != "tags/can/have/slashes" || path != "baz.txt" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/tags/can/have/slashes/baz.txt")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately with a nested ref")
+	}
+
+	ref, path, err = pick_longest_ref("do/not/eat/everything/baz.txt", []string{"do", "not", "eat"})
+	if ref != "do" || path != "not/eat/everything/baz.txt" {
+		t.Log("ref", ref, "path", path)
+		t.Error("Could not match /blob/do/not/eat/everything/baz.txt to 'do'")
+	} else if err != nil {
+		t.Error("Threw an error inappropriately with a non-greedy match")
+	}
+}
+
+func TestPathRsplit(t *testing.T) {
+	for _, test_case := range []struct {
+		Path, OutputA, OutputB string
+	}{
+		{"foo", "foo", ""},
+		{"/foo", "foo", ""},
+		{"foo/", "foo", ""},
+		{"", "", ""},
+		{"/", "", ""},
+		{"/foo/bar/baz", "foo", "bar/baz"},
+		{"foo/bar/baz", "foo", "bar/baz"},
+	} {
+		root, branch := PathRsplit(test_case.Path)
+		if root != test_case.OutputA {
+			t.Error("root", root, "does not match", test_case.OutputA, "from", test_case.Path)
+		}
+		if branch != test_case.OutputB {
+			t.Error("branch", branch, "does not match", test_case.OutputB, "from", test_case.Path)
+		}
+	}
+}
+
+func TestHttpTreeApi(t *testing.T) {
+	// If you go to http://server:port/blob/master, you might hope to get a file
+	// listing instead of a 404
+	for _, test_case := range []struct {
+		Blob, Path      string
+		ExpectedEntries []string
+	}{
+		// XXX FIXME Check branch name root too
+		{"rooted/tags/may/confuse", "/", []string{"gitserve.go", "gitserve_test.go"}},
+		{"2ccc6", "/", []string{"gitserve.go"}},
+		{"82fcd77642", "/a", []string{"b"}},
+		{"82fcd77642", "/a/", []string{"blob/82fcd77642/a/b"}},
+		{"82fcd77642", "/a/b", []string{"c/"}},
+		{"82fcd77642", "/a/b/c/", []string{"testfile"}},
+	} {
+		req, err := http.NewRequest("GET", path.Join("/blob/", test_case.Blob, test_case.Path), nil)
+		if err != nil {
+			t.Fatal("Test request failed", err)
+		}
+		w := httptest.NewRecorder()
+		servePath(w, req)
+
+		listing := w.Body.String()
+		t.Log(path.Join("/blob/", test_case.Blob, test_case.Path))
+		for _, entry := range test_case.ExpectedEntries {
+			if !strings.Contains(listing, entry) {
+				t.Fatal("Output not what we expected- missing ", entry, " from ", test_case.Path, " @ ", test_case.Blob, "got:\n", textSample(listing))
+			}
+		}
+	}
+}
+
+func textSample(incoming string) string {
+	if len(incoming) > 200 {
+		return incoming[0:200]
+	} else {
+		return incoming
 	}
 }
 
@@ -91,20 +201,30 @@ func TestHttpBlobApi(t *testing.T) {
 
 	for _, test_case := range []struct {
 		BlobName,
-		BlobMd5 string
+		BlobMd5,
+		Path string
 	}{
-		{starting_hash, md5_of_starting_file},            // Easy case is definitely "no slashes allowed"
-		{"tags/0.0.0.0.1", md5_of_gitserve_at_first_tag}, // Let's try it with a human-readable name
+		{starting_hash, md5_of_starting_file, "gitserve.go"},            // Easy case is definitely "no slashes allowed"
+		{"tags/0.0.0.0.1", md5_of_gitserve_at_first_tag, "gitserve.go"}, // Let's try it with a human-readable name
+		{"82fcd77642ac584c7debd8709b48d799d7b9fa33", md5_of_nested_testfile, "a/b/c/testfile"},
 	} {
-		req, err := http.NewRequest("GET", "http://example.com/blob/"+test_case.BlobName+"/gitserve.go", nil)
+		url := path.Join("/blob/", test_case.BlobName, test_case.Path)
+		t.Log(url)
+		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
 			t.Error("Test request failed", err)
 		}
 		w := httptest.NewRecorder()
 		servePath(w, req)
+		if w.Code != 200 {
+			t.Error(w.Code, w.Body.String())
+		}
 		output_hash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
 		if output_hash != test_case.BlobMd5 {
-			t.Error("Output not what we expected- check /tmp/dat1\n\nand hashes ", output_hash, " vs ", md5_of_starting_file)
+			t.Log(fmt.Sprintf("failed: %q", w.Body.String()))
+			ioutil.WriteFile("/tmp/failed", []byte(w.Body.String()), 0644)
+			t.Error("Output not what we expected- check ", test_case.Path, "\n\nand hashes ", output_hash, " vs ", test_case.BlobMd5, " bad output sample:\n", textSample(w.Body.String()))
 		}
+		t.Log("-=-=-=-==-==-=-=-=-=-=-==-==-=-==-=-")
 	}
 }

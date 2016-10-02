@@ -1,150 +1,45 @@
 package main
 
+// This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
-	"path"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
-type GitObjectType string
-
-const (
-	GitBlob   = "blob"
-	GitTree   = "tree"
-	GitCommit = "commit"
-	GitTag    = "tag"
-)
-
-type GitObject struct {
-	Permission uint32
-	ObjectType GitObjectType
-	Hash       string
-	Name       string
+func stripLeadingSlash(path string) string {
+	fmt.Println("Stripping leading slash from ", path)
+	if len(path) > 1 && path[0] == '/' {
+		fmt.Println(path[1:])
+		return path[1:]
+	}
+	return path
 }
 
-func git_show(hash string) ([]byte, error) {
-	cmd := exec.Command("git", "show", hash)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Println("could not attach a pipe to the command ", err)
-		return nil, err
-	}
-	err = cmd.Start()
-	if err != nil {
-		fmt.Println("command failed with ", err)
-		return nil, err
-	}
-	return ioutil.ReadAll(stdout)
-}
-
-func get_refs() ([]string, error) {
-	var refs []string
-	refs_cmd := exec.Command("git", "show-ref")
-	stdout, err := refs_cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	refs_cmd.Start()
-	// Should consider hoisting this
-	refs_r, err := regexp.Compile("^([0-9a-f]{40})\\s+(.+)")
-	if err != nil {
-		return nil, err
-	}
-	buf_stdout := bufio.NewReader(stdout)
-	for line, err := buf_stdout.ReadBytes('\n'); err == nil; line, err = buf_stdout.ReadBytes('\n') {
-		results := refs_r.FindSubmatch(line)
-		if len(results) != 3 {
-			return nil, errors.New(fmt.Sprintf("Confused by your refs- got %d matches out of something that's supposed to have 2 fields. Line: %s Results: %q", len(results), line, results))
-		}
-		refs = append(refs, string(results[2][len("refs/"):]))
-	}
-	return refs, err
-}
-
-func lstree(commit string) ([]GitObject, error) {
-	// Inspect the cwd
-	cmd := exec.Command("git", "ls-tree", commit)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Println("could not attach a pipe to the command ", err)
-		return nil, err
-	}
-	err = cmd.Start()
-	if err != nil {
-		fmt.Println("command failed with ", err)
-		return nil, err
-	}
-	buf_stdout := bufio.NewReader(stdout)
-
-	var obs []GitObject
-	// for reasons I do not understand, saying "this ends with a newline" means
-	// the newline gets eaten by the final capture. Also, ending with a '$' breaks
-	// the whole match.
-	tree_r, err := regexp.Compile("^([0-9]+)\\s([a-z]+)\\s([a-z0-9]+)\\s(.+)")
-	if err != nil {
-		panic(err)
-	}
-	for line, err := buf_stdout.ReadBytes('\n'); err == nil; line, err = buf_stdout.ReadBytes('\n') {
-		results := tree_r.FindSubmatch(line)
-		if len(results) != 5 {
-			// We expect to get back [original, perms, ob, hash, filename]
-			return nil, errors.New(fmt.Sprintf("Unexpected parse of `git ls-tree` output: %q", results))
-		}
-		permissions, err := strconv.ParseUint(string(results[1]), 10, 32)
-		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Could not parse permissions for file %s, got %s", results[4], results[1]))
-		}
-		obs = append(obs, GitObject{uint32(permissions), GitObjectType(results[2]), string(results[3]), string(results[4])})
-	}
-	return obs, err
-}
-
-func get_object(starting_hash, final_path string) ([]byte, error) {
-	fmt.Println("starting hash @get_object", starting_hash)
-	objects, err := lstree(starting_hash)
-	if err != nil {
-		return nil, err
-	}
-
-	next_prefix, rest := path.Split(final_path)
-	for _, object := range objects {
-		fmt.Println(next_prefix, object.Name)
-		if object.Name == next_prefix {
-			if object.ObjectType == GitTree {
-				return get_object(object.Hash, rest)
-			} else {
-				// XXX let's do a better job here
-				return nil, errors.New("Unsupported object type")
-			}
-		} else if object.Name == rest {
-			if object.ObjectType == GitBlob {
-				return git_show(object.Hash)
-			}
+func pick_longest_ref(url string, refs []string) (string, string, error) {
+	// Check if there is a human-readable ref, which may contain slashes, here
+	for _, ref := range refs {
+		if strings.HasPrefix(url, ref) {
+			return ref, stripLeadingSlash(url[len(ref):]), nil
 		}
 	}
-	return nil, errors.New("file not found in tree")
-}
-
-type Lengthwise []string
-
-func (s Lengthwise) Len() int {
-	return len(s)
-}
-func (s Lengthwise) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-func (s Lengthwise) Less(i, j int) bool {
-	return len(s[i]) < len(s[j])
+	// For some reason I have it in my head that it's best to test all exact
+	// matches before falling back on fuzzy ones
+	for _, ref := range refs {
+		// XXX: Is resolving branches before tags the right thing to do?
+		if strings.HasPrefix("heads/"+url, ref) {
+			return ref, stripLeadingSlash(url[len(ref)-len("heads/"):]), nil
+		} else if strings.HasPrefix("tags/"+url, ref) {
+			return ref, stripLeadingSlash(url[len(ref)-len("tags/"):]), nil
+		}
+	}
+	return "", "", errors.New(fmt.Sprintf("Could not find %q in %q", url, refs))
 }
 
 func servePath(writer http.ResponseWriter, request *http.Request) {
@@ -158,27 +53,33 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 	// Make sure we're in the right place doing the right thing
 	path_components := strings.Split(request.URL.Path, "/")
+	fmt.Println("Path components", path_components)
 	if path_components[0] != "" || path_components[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
 
-	var target_name = path_components[2] // IE, /blob/path_components[2]/
-	// Check if there is a human-readable ref, which may contain slashes, here
-	for _, ref := range refs {
-		if strings.HasPrefix(request.URL.Path[len("/blob/"):], ref+"/") {
-			target_name = ref
-			// Taking advantage of the fact that `refs` is sorted,
-			// and that git does not allow both foo/bar and /foo to be refs
-			break
-		}
+	trimlen := len("/blob/")
+
+	fmt.Printf("all refs: %q\n", refs)
+
+	// Pick from human readable refs
+	ref, path, err := pick_longest_ref(request.URL.Path[trimlen:], refs)
+
+	// If it isn't a ref, assume it's a hash literal
+	if err != nil {
+		fmt.Println("Assuming we got a hash literal- ", err)
+		ref = path_components[2]
+		path = strings.Join(path_components[3:], "/")
 	}
 
-	blob, err := get_object(target_name, strings.Join(path_components[3:], "/"))
+	fmt.Println("ref ", ref)
+
+	blob, err := get_object(ref, request.URL.Path, path)
 
 	if err != nil {
+		writer.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(writer, err)
-		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	fmt.Fprint(writer, string(blob))
@@ -186,7 +87,8 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 func main() {
 	var git_path *string = flag.String("repo", ".", "git repo to serve")
-	var internal_path *string = flag.String("path", ".", "path to the object")
+	var address *string = flag.String("listen", "0.0.0.0", "what address to listen to")
+	var port *int = flag.Int("port", 6504, "port to listen on")
 	flag.Parse()
 
 	// Move to the git repo
@@ -204,7 +106,6 @@ func main() {
 		os.Exit(3)
 	}
 
-	blob, err := get_object("HEAD", *internal_path)
-	fmt.Println(string(blob))
-	fmt.Println(err)
+	http.HandleFunc("/blob/", servePath)
+	http.ListenAndServe(fmt.Sprintf("%s:%d", *address, *port), nil)
 }
