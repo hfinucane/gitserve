@@ -166,7 +166,7 @@ func TestHttpTreeApi(t *testing.T) {
 		{"2ccc6", "/", []string{"gitserve.go"}},
 		{"82fcd77642", "/a", []string{"b"}},
 		{"82fcd77642", "/a/", []string{"b"}},
-		{"82fcd77642", "/a/b", []string{"c"}},
+		{"82fcd77642", "/a/b", []string{"c/"}},
 		{"82fcd77642", "/a/b/c/", []string{"testfile"}},
 	} {
 		req, err := http.NewRequest("GET", path.Join("/blob/", test_case.Blob, test_case.Path), nil)

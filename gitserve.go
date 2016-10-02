@@ -97,7 +97,7 @@ func git_list(hash string) ([]byte, error) {
 	<body>
 	<ul>
 	{{- range .}}
-	<li><a href="./{{.Name}}">{{.Name}}</a>
+	<li><a href="./{{.Name}}{{ if eq .ObjectType "tree"}}/{{ end }}">{{.Name}}</a>
 	{{- end}}
 	</ul>
 	</body>
