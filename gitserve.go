@@ -14,9 +14,7 @@ import (
 )
 
 func stripLeadingSlash(path string) string {
-	fmt.Println("Stripping leading slash from ", path)
 	if len(path) > 1 && path[0] == '/' {
-		fmt.Println(path[1:])
 		return path[1:]
 	}
 	return path
@@ -53,7 +51,6 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 	// Make sure we're in the right place doing the right thing
 	path_components := strings.Split(request.URL.Path, "/")
-	fmt.Println("Path components", path_components)
 	if path_components[0] != "" || path_components[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
@@ -61,19 +58,14 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 	trimlen := len("/blob/")
 
-	fmt.Printf("all refs: %q\n", refs)
-
 	// Pick from human readable refs
 	ref, path, err := pick_longest_ref(request.URL.Path[trimlen:], refs)
 
 	// If it isn't a ref, assume it's a hash literal
 	if err != nil {
-		fmt.Println("Assuming we got a hash literal- ", err)
 		ref = path_components[2]
 		path = strings.Join(path_components[3:], "/")
 	}
-
-	fmt.Println("ref ", ref)
 
 	blob, err := get_object(ref, request.URL.Path, path)
 
@@ -94,7 +86,7 @@ func main() {
 	// Move to the git repo
 	err := os.Chdir(*git_path)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("Could not move to", git_path, err)
 		os.Exit(2)
 	}
 
