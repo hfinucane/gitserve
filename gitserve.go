@@ -87,7 +87,7 @@ func get_refs() ([]string, error) {
 	return refs, err
 }
 
-func git_list(hash string) ([]byte, error) {
+func git_list(hash, starting_string string) ([]byte, error) {
 	objects, err := lstree(hash)
 	if err != nil {
 		return nil, err
@@ -96,8 +96,9 @@ func git_list(hash string) ([]byte, error) {
 	t, err := template.New("list").Parse(`<html>
 	<body>
 	<ul>
-	{{- range .}}
-	<li><a href="./{{.Name}}{{ if eq .ObjectType "tree"}}/{{ end }}">{{.Name}}</a>
+	{{ $prefix := .Prefix }}
+	{{- range $element := .Objects}}
+	<li><a href="{{$prefix}}/{{$element.Name}}{{ if eq $element.ObjectType "tree"}}/{{ end }}">{{$element.Name}}</a>
 	{{- end}}
 	</ul>
 	</body>
@@ -106,7 +107,11 @@ func git_list(hash string) ([]byte, error) {
 		return nil, err
 	}
 	var buf bytes.Buffer
-	err = t.Execute(&buf, objects)
+	var data = struct {
+		Objects []GitObject
+		Prefix  string
+	}{objects, starting_string}
+	err = t.Execute(&buf, data)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +156,7 @@ func lstree(commit string) ([]GitObject, error) {
 	return obs, err
 }
 
-func get_object(starting_hash, final_path string) ([]byte, error) {
+func get_object(starting_hash, starting_string, final_path string) ([]byte, error) {
 	fmt.Println("starting hash @get_object", starting_hash, " @final_path: ", final_path)
 	objects, err := lstree(starting_hash)
 	if err != nil {
@@ -159,7 +164,7 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 	}
 
 	if final_path == "" {
-		return git_list(starting_hash)
+		return git_list(starting_hash, starting_string)
 	}
 
 	next_prefix, rest := PathRsplit(final_path)
@@ -171,7 +176,7 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 		if rest == "" { // end of the line
 			if object.Name == next_prefix {
 				if object.ObjectType == GitTree {
-					return git_list(object.Hash)
+					return git_list(object.Hash, starting_string)
 				} else if object.ObjectType == GitBlob {
 					return git_show(object.Hash)
 				} else {
@@ -182,7 +187,7 @@ func get_object(starting_hash, final_path string) ([]byte, error) {
 		} else {
 			if object.Name == next_prefix {
 				if object.ObjectType == GitTree {
-					return get_object(object.Hash, rest)
+					return get_object(object.Hash, starting_string, rest)
 				} else if object.ObjectType == GitBlob {
 					return nil, errors.New(fmt.Sprintf("This is a directory, not an object, ", object.ObjectType, object.Hash, object.Name))
 				} else {
@@ -296,7 +301,7 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 	fmt.Println("ref ", ref)
 
-	blob, err := get_object(ref, path)
+	blob, err := get_object(ref, request.URL.Path, path)
 
 	if err != nil {
 		writer.WriteHeader(http.StatusNotFound)

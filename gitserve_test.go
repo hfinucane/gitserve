@@ -19,7 +19,7 @@ var md5_of_gitserve_at_first_tag string = "bc01be1e5c1fbdbe31ac89ae8fb154cd"
 var md5_of_nested_testfile string = "d8e8fca2dc0f896fd7cb4cb0031ba249"
 
 func TestDisplayingObject(t *testing.T) {
-	first_commit, err := get_object(starting_hash, "gitserve.go")
+	first_commit, err := get_object(starting_hash, "prefix", "gitserve.go")
 
 	first_file_calculated_md5 := fmt.Sprintf("%x", md5.Sum(first_commit))
 
@@ -69,7 +69,7 @@ func TestGetHumanNames(t *testing.T) {
 }
 
 func TestDisplayingMissingObject(t *testing.T) {
-	first_commit, err := get_object(starting_hash, "quack")
+	first_commit, err := get_object(starting_hash, "prefix", "quack")
 
 	if err == nil {
 		t.Error("This should be an error- this is not a legit file")
@@ -80,7 +80,7 @@ func TestDisplayingMissingObject(t *testing.T) {
 }
 
 func TestDisplayingBadRoot(t *testing.T) {
-	first_commit, err := get_object("invalid_hash", "gitserve.go")
+	first_commit, err := get_object("invalid_hash", "prefix", "gitserve.go")
 
 	if err == nil {
 		t.Error("This should be an error- this is not a legit hash")
@@ -165,7 +165,7 @@ func TestHttpTreeApi(t *testing.T) {
 		{"rooted/tags/may/confuse", "/", []string{"gitserve.go", "gitserve_test.go"}},
 		{"2ccc6", "/", []string{"gitserve.go"}},
 		{"82fcd77642", "/a", []string{"b"}},
-		{"82fcd77642", "/a/", []string{"b"}},
+		{"82fcd77642", "/a/", []string{"blob/82fcd77642/a/b"}},
 		{"82fcd77642", "/a/b", []string{"c/"}},
 		{"82fcd77642", "/a/b/c/", []string{"testfile"}},
 	} {
