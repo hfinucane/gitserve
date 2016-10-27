@@ -3,7 +3,6 @@ package main
 // This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a copy of the MPL was not distributed with this file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -20,7 +19,7 @@ func stripLeadingSlash(path string) string {
 	return path
 }
 
-func pick_longest_ref(url string, refs []string) (string, string, error) {
+func pickLongestRef(url string, refs []string) (string, string, error) {
 	// Check if there is a human-readable ref, which may contain slashes, here
 	for _, ref := range refs {
 		if strings.HasPrefix(url, ref) {
@@ -37,21 +36,21 @@ func pick_longest_ref(url string, refs []string) (string, string, error) {
 			return ref, stripLeadingSlash(url[len(ref)-len("tags/"):]), nil
 		}
 	}
-	return "", "", errors.New(fmt.Sprintf("Could not find %q in %q", url, refs))
+	return "", "", fmt.Errorf("Could not find %q in %q", url, refs)
 }
 
 func servePath(writer http.ResponseWriter, request *http.Request) {
-	refs, err := get_refs()
+	refs, err := getRefs()
 	if err != nil {
 		fmt.Fprint(writer, err)
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	sort.Sort(Lengthwise(refs))
+	sort.Sort(lengthwise(refs))
 
 	// Make sure we're in the right place doing the right thing
-	path_components := strings.Split(request.URL.Path, "/")
-	if path_components[0] != "" || path_components[1] != "blob" {
+	pathComponents := strings.Split(request.URL.Path, "/")
+	if pathComponents[0] != "" || pathComponents[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -59,15 +58,15 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	trimlen := len("/blob/")
 
 	// Pick from human readable refs
-	ref, path, err := pick_longest_ref(request.URL.Path[trimlen:], refs)
+	ref, path, err := pickLongestRef(request.URL.Path[trimlen:], refs)
 
 	// If it isn't a ref, assume it's a hash literal
 	if err != nil {
-		ref = path_components[2]
-		path = strings.Join(path_components[3:], "/")
+		ref = pathComponents[2]
+		path = strings.Join(pathComponents[3:], "/")
 	}
 
-	blob, err := get_object(ref, request.URL.Path, path)
+	blob, err := getObject(ref, request.URL.Path, path)
 
 	if err != nil {
 		writer.WriteHeader(http.StatusNotFound)
@@ -78,15 +77,15 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 }
 
 func main() {
-	var git_path *string = flag.String("repo", ".", "git repo to serve")
-	var address *string = flag.String("listen", "0.0.0.0", "what address to listen to")
-	var port *int = flag.Int("port", 6504, "port to listen on")
+	var gitPath = flag.String("repo", ".", "git repo to serve")
+	var address = flag.String("listen", "0.0.0.0", "what address to listen to")
+	var port = flag.Int("port", 6504, "port to listen on")
 	flag.Parse()
 
 	// Move to the git repo
-	err := os.Chdir(*git_path)
+	err := os.Chdir(*gitPath)
 	if err != nil {
-		fmt.Println("Could not move to", git_path, err)
+		fmt.Println("Could not move to", gitPath, err)
 		os.Exit(2)
 	}
 
@@ -94,7 +93,7 @@ func main() {
 	cmd := exec.Command("git", "status")
 	err = cmd.Run()
 	if err != nil {
-		fmt.Println("Git didn't like ", *git_path, " got ", err)
+		fmt.Println("Git didn't like ", *gitPath, " got ", err)
 		os.Exit(3)
 	}
 

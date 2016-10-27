@@ -5,7 +5,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -15,15 +14,23 @@ import (
 	"strings"
 )
 
+// GitObjectType Represents the type of a git object. Content is in "blob"
+// types, everything else is metadata.
 type GitObjectType string
 
 const (
-	GitBlob   = "blob"
-	GitTree   = "tree"
+	// GitBlob represents content
+	GitBlob = "blob"
+	// GitTree represents a 'filesystem' in Git
+	GitTree = "tree"
+	// GitCommit represents a snapshot of state with comment
 	GitCommit = "commit"
-	GitTag    = "tag"
+	// GitTag represents a named snapshot of state with comment
+	GitTag = "tag"
 )
 
+// GitObject is a metadata blob describing everything about an object in git
+// but the content
 type GitObject struct {
 	Permission uint32
 	ObjectType GitObjectType
@@ -31,20 +38,20 @@ type GitObject struct {
 	Name       string
 }
 
-func PathRsplit(path string) (first, rest string) {
+func pathRsplit(path string) (first, rest string) {
 	if path == "" || path == "/" {
 		return "", ""
 	}
 	i := strings.Index(path, "/")
 	if i == 0 {
-		return PathRsplit(path[1:]) // Just... forget handling this
+		return pathRsplit(path[1:]) // Just... forget handling this
 	} else if i == -1 {
 		return path, ""
 	}
 	return path[:i], path[i+1:]
 }
 
-func git_show(hash string) ([]byte, error) {
+func gitShow(hash string) ([]byte, error) {
 	cmd := exec.Command("git", "show", hash)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -57,31 +64,31 @@ func git_show(hash string) ([]byte, error) {
 	return ioutil.ReadAll(stdout)
 }
 
-func get_refs() ([]string, error) {
+func getRefs() ([]string, error) {
 	var refs []string
-	refs_cmd := exec.Command("git", "show-ref")
-	stdout, err := refs_cmd.StdoutPipe()
+	refsCmd := exec.Command("git", "show-ref")
+	stdout, err := refsCmd.StdoutPipe()
 	if err != nil {
 		return nil, err
 	}
-	refs_cmd.Start()
+	refsCmd.Start()
 	// Should consider hoisting this
-	refs_r, err := regexp.Compile("^([0-9a-f]{40})\\s+(.+)")
+	refsR, err := regexp.Compile("^([0-9a-f]{40})\\s+(.+)")
 	if err != nil {
 		return nil, err
 	}
-	buf_stdout := bufio.NewReader(stdout)
-	for line, err := buf_stdout.ReadBytes('\n'); err == nil; line, err = buf_stdout.ReadBytes('\n') {
-		results := refs_r.FindSubmatch(line)
+	bufStdout := bufio.NewReader(stdout)
+	for line, err := bufStdout.ReadBytes('\n'); err == nil; line, err = bufStdout.ReadBytes('\n') {
+		results := refsR.FindSubmatch(line)
 		if len(results) != 3 {
-			return nil, errors.New(fmt.Sprintf("Confused by your refs- got %d matches out of something that's supposed to have 2 fields. Line: %s Results: %q", len(results), line, results))
+			return nil, fmt.Errorf("Confused by your refs- got %d matches out of something that's supposed to have 2 fields. Line: %s Results: %q", len(results), line, results)
 		}
 		refs = append(refs, string(results[2][len("refs/"):]))
 	}
 	return refs, err
 }
 
-func git_list(hash, starting_string string) ([]byte, error) {
+func gitList(hash, startingString string) ([]byte, error) {
 	objects, err := lstree(hash)
 	if err != nil {
 		return nil, err
@@ -103,7 +110,7 @@ func git_list(hash, starting_string string) ([]byte, error) {
 	var data = struct {
 		Objects []GitObject
 		Prefix  string
-	}{objects, starting_string}
+	}{objects, startingString}
 	err = t.Execute(&buf, data)
 	if err != nil {
 		return nil, err
@@ -122,65 +129,65 @@ func lstree(commit string) ([]GitObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf_stdout := bufio.NewReader(stdout)
+	bufStdout := bufio.NewReader(stdout)
 
 	var obs []GitObject
 	// for reasons I do not understand, saying "this ends with a newline" means
 	// the newline gets eaten by the final capture. Also, ending with a '$' breaks
 	// the whole match.
-	tree_r, err := regexp.Compile("^([0-9]+)\\s([a-z]+)\\s([a-z0-9]+)\\s(.+)")
+	treeR, err := regexp.Compile("^([0-9]+)\\s([a-z]+)\\s([a-z0-9]+)\\s(.+)")
 	if err != nil {
 		panic(err)
 	}
-	for line, err := buf_stdout.ReadBytes('\n'); err == nil; line, err = buf_stdout.ReadBytes('\n') {
-		results := tree_r.FindSubmatch(line)
+	for line, err := bufStdout.ReadBytes('\n'); err == nil; line, err = bufStdout.ReadBytes('\n') {
+		results := treeR.FindSubmatch(line)
 		if len(results) != 5 {
 			// We expect to get back [original, perms, ob, hash, filename]
-			return nil, errors.New(fmt.Sprintf("Unexpected parse of `git ls-tree` output: %q", results))
+			return nil, fmt.Errorf("Unexpected parse of `git ls-tree` output: %q", results)
 		}
 		permissions, err := strconv.ParseUint(string(results[1]), 10, 32)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Could not parse permissions for file %s, got %s", results[4], results[1]))
+			return nil, fmt.Errorf("Could not parse permissions for file %s, got %s", results[4], results[1])
 		}
 		obs = append(obs, GitObject{uint32(permissions), GitObjectType(results[2]), string(results[3]), string(results[4])})
 	}
 	return obs, err
 }
 
-func get_object(starting_hash, starting_string, final_path string) ([]byte, error) {
-	objects, err := lstree(starting_hash)
+func getObject(startingHash, startingString, finalPath string) ([]byte, error) {
+	objects, err := lstree(startingHash)
 	if err != nil {
 		return nil, err
 	}
 
-	if final_path == "" {
-		return git_list(starting_hash, starting_string)
+	if finalPath == "" {
+		return gitList(startingHash, startingString)
 	}
 
-	next_prefix, rest := PathRsplit(final_path)
+	nextPrefix, rest := pathRsplit(finalPath)
 
 	for _, object := range objects {
 		if rest == "" { // end of the line
-			if object.Name == next_prefix {
+			if object.Name == nextPrefix {
 				if object.ObjectType == GitTree {
-					return git_list(object.Hash, starting_string)
+					return gitList(object.Hash, startingString)
 				} else if object.ObjectType == GitBlob {
-					return git_show(object.Hash)
+					return gitShow(object.Hash)
 				} else {
-					return nil, errors.New(fmt.Sprintf("Unsupported object type, ", object.ObjectType))
+					return nil, fmt.Errorf("Unsupported object type, ", object.ObjectType)
 				}
 			}
 		} else {
-			if object.Name == next_prefix {
+			if object.Name == nextPrefix {
 				if object.ObjectType == GitTree {
-					return get_object(object.Hash, starting_string, rest)
+					return getObject(object.Hash, startingString, rest)
 				} else if object.ObjectType == GitBlob {
-					return nil, errors.New(fmt.Sprintf("This is a directory, not an object, ", object.ObjectType, object.Hash, object.Name))
+					return nil, fmt.Errorf("This is a directory, not an object, ", object.ObjectType, object.Hash, object.Name)
 				} else {
-					return nil, errors.New(fmt.Sprintf("Unsupported object type, ", object.ObjectType))
+					return nil, fmt.Errorf("Unsupported object type, ", object.ObjectType)
 				}
 			}
 		}
 	}
-	return nil, errors.New(fmt.Sprintln("file not found in tree", starting_string, final_path))
+	return nil, fmt.Errorf("file not found in tree", startingString, finalPath)
 }

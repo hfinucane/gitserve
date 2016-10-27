@@ -1,27 +1,27 @@
 package main
 
-type Lengthwise []string
+type lengthwise []string
 
-func (s Lengthwise) Len() int {
+func (s lengthwise) Len() int {
 	return len(s)
 }
-func (s Lengthwise) Swap(i, j int) {
+func (s lengthwise) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
-func (s Lengthwise) Less(i, j int) bool {
-	var i_slash_count, j_slash_count int
+func (s lengthwise) Less(i, j int) bool {
+	var iCount, jCount int
 	for _, c := range s[i] {
 		if c == '/' {
-			i_slash_count++
+			iCount++
 		}
 	}
 	for _, c := range s[j] {
 		if c == '/' {
-			j_slash_count++
+			jCount++
 		}
 	}
-	if i_slash_count != j_slash_count {
-		return i_slash_count > j_slash_count
+	if iCount != jCount {
+		return iCount > jCount
 	}
 	return len(s[i]) > len(s[j])
 }
