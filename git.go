@@ -174,7 +174,7 @@ func getObject(startingHash, startingString, finalPath string) ([]byte, error) {
 				} else if object.ObjectType == GitBlob {
 					return gitShow(object.Hash)
 				} else {
-					return nil, fmt.Errorf("Unsupported object type, ", object.ObjectType)
+					return nil, fmt.Errorf("Unsupported object type, %s", object.ObjectType)
 				}
 			}
 		} else {
@@ -182,12 +182,12 @@ func getObject(startingHash, startingString, finalPath string) ([]byte, error) {
 				if object.ObjectType == GitTree {
 					return getObject(object.Hash, startingString, rest)
 				} else if object.ObjectType == GitBlob {
-					return nil, fmt.Errorf("This is a directory, not an object, ", object.ObjectType, object.Hash, object.Name)
+					return nil, fmt.Errorf("This is a directory, not an object, %s %s %s", object.ObjectType, object.Hash, object.Name)
 				} else {
-					return nil, fmt.Errorf("Unsupported object type, ", object.ObjectType)
+					return nil, fmt.Errorf("Unsupported object type, %s", object.ObjectType)
 				}
 			}
 		}
 	}
-	return nil, fmt.Errorf("file not found in tree", startingString, finalPath)
+	return nil, fmt.Errorf("file not found in tree %s %s", startingString, finalPath)
 }
