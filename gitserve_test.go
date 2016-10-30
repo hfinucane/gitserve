@@ -91,6 +91,23 @@ func TestDisplayingBadRoot(t *testing.T) {
 }
 
 func TestPickLongestRef(t *testing.T) {
+	for _, testCase := range []struct {
+		Path        string
+		CorrectRef  string
+		CorrectPath string
+		Refs        []string
+	}{
+		{"master/Makefile", "heads/master", "Makefile", []string{"heads/master", "tags/1.7"}},
+	} {
+		ref, path, err := pickLongestRef(testCase.Path, testCase.Refs)
+		if ref != testCase.CorrectRef || path != testCase.CorrectPath {
+			t.Log("ref", ref, "path", path)
+			t.Errorf("Could not match /blob/%s against ref '%s'", testCase.Path, testCase.CorrectRef)
+		} else if err != nil {
+			t.Error("Threw an error (%s) inappropriately picking %s out of %q", err, ref, path)
+		}
+	}
+
 	ref, path, err := pickLongestRef("master/Makefile", []string{"heads/master", "tags/1.7"})
 	if ref != "heads/master" || path != "Makefile" {
 		t.Log("ref", ref, "path", path)
