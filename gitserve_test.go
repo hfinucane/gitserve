@@ -108,7 +108,7 @@ func TestPickLongestRef(t *testing.T) {
 			t.Log("ref", ref, "path", path)
 			t.Errorf("Could not match /blob/%s against ref '%s'", testCase.Path, testCase.CorrectRef)
 		} else if err != nil {
-			t.Error("Threw an error (%s) inappropriately picking %s out of %q", err, ref, path)
+			t.Errorf("Threw an error (%s) inappropriately picking %s out of %q", err, ref, path)
 		}
 	}
 }
