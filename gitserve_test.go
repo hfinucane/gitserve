@@ -98,6 +98,10 @@ func TestPickLongestRef(t *testing.T) {
 		Refs        []string
 	}{
 		{"master/Makefile", "heads/master", "Makefile", []string{"heads/master", "tags/1.7"}},
+		{"foo", "foo", "", []string{"foo", "bar", "baz"}},
+		{"foo/baz.txt", "foo", "baz.txt", []string{"foo", "bar", "baz"}},
+		{"tags/can/have/slashes/baz.txt", "tags/can/have/slashes", "baz.txt", []string{"tags/can/have/slashes", "tags/can", "tags"}},
+		{"do/not/eat/everything/baz.txt", "do", "not/eat/everything/baz.txt", []string{"do", "not", "eat"}},
 	} {
 		ref, path, err := pickLongestRef(testCase.Path, testCase.Refs)
 		if ref != testCase.CorrectRef || path != testCase.CorrectPath {
@@ -106,46 +110,6 @@ func TestPickLongestRef(t *testing.T) {
 		} else if err != nil {
 			t.Error("Threw an error (%s) inappropriately picking %s out of %q", err, ref, path)
 		}
-	}
-
-	ref, path, err := pickLongestRef("master/Makefile", []string{"heads/master", "tags/1.7"})
-	if ref != "heads/master" || path != "Makefile" {
-		t.Log("ref", ref, "path", path)
-		t.Error("Could not match /blob/master/Makefile against ref 'master'")
-	} else if err != nil {
-		t.Error("Threw an error inappropriately picking foo out of ['heads/master', 'tags/1.7']")
-	}
-
-	ref, path, err = pickLongestRef("foo", []string{"foo", "bar", "baz"})
-	if ref != "foo" || path != "" {
-		t.Log("ref", ref, "path", path)
-		t.Error("Could not match /blob/foo against ref 'foo'")
-	} else if err != nil {
-		t.Error("Threw an error inappropriately picking foo out of ['foo','bar','baz']")
-	}
-
-	ref, path, err = pickLongestRef("foo/baz.txt", []string{"foo", "bar", "baz"})
-	if ref != "foo" || path != "baz.txt" {
-		t.Log("ref", ref, "path", path)
-		t.Error("Could not match /blob/foo/baz.txt against ref 'foo'")
-	} else if err != nil {
-		t.Error("Threw an error inappropriately with file name")
-	}
-
-	ref, path, err = pickLongestRef("tags/can/have/slashes/baz.txt", []string{"tags/can/have/slashes", "tags/can", "tags"})
-	if ref != "tags/can/have/slashes" || path != "baz.txt" {
-		t.Log("ref", ref, "path", path)
-		t.Error("Could not match /blob/tags/can/have/slashes/baz.txt")
-	} else if err != nil {
-		t.Error("Threw an error inappropriately with a nested ref")
-	}
-
-	ref, path, err = pickLongestRef("do/not/eat/everything/baz.txt", []string{"do", "not", "eat"})
-	if ref != "do" || path != "not/eat/everything/baz.txt" {
-		t.Log("ref", ref, "path", path)
-		t.Error("Could not match /blob/do/not/eat/everything/baz.txt to 'do'")
-	} else if err != nil {
-		t.Error("Threw an error inappropriately with a non-greedy match")
 	}
 }
 
