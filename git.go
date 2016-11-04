@@ -73,7 +73,7 @@ func getRefs() ([]string, error) {
 	}
 	refsCmd.Start()
 	// Should consider hoisting this
-	refsR, err := regexp.Compile("^([0-9a-f]{40})\\s+(.+)")
+	refsR, err := regexp.Compile(`^([0-9a-f]{40})\s+(.+)`)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func lstree(commit string) ([]GitObject, error) {
 	// for reasons I do not understand, saying "this ends with a newline" means
 	// the newline gets eaten by the final capture. Also, ending with a '$' breaks
 	// the whole match.
-	treeR, err := regexp.Compile("^([0-9]+)\\s([a-z]+)\\s([a-z0-9]+)\\s(.+)")
+	treeR, err := regexp.Compile(`^([0-9]+)\s([a-z]+)\s([a-z0-9]+)\s(.+)`)
 	if err != nil {
 		panic(err)
 	}
