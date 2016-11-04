@@ -5,7 +5,6 @@ package main
 import (
 	"crypto/md5"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -202,7 +201,6 @@ func TestHttpBlobApi(t *testing.T) {
 		outputHash := fmt.Sprintf("%x", md5.Sum([]byte(w.Body.String())))
 		if outputHash != tc.BlobMd5 {
 			t.Log(fmt.Sprintf("failed: %q", w.Body.String()))
-			ioutil.WriteFile("/tmp/failed", []byte(w.Body.String()), 0644)
 			t.Error("Output not what we expected- check ", tc.Path, "\n\nand hashes ", outputHash, " vs ", tc.BlobMd5, " bad output sample:\n", textSample(w.Body.String()))
 		}
 		t.Log("-=-=-=-==-==-=-=-=-=-=-==-==-=-==-=-")

@@ -71,7 +71,10 @@ func getRefs() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	refsCmd.Start()
+	err = refsCmd.Start()
+	if err != nil {
+		return nil, err
+	}
 	// Should consider hoisting this
 	refsR, err := regexp.Compile(`^([0-9a-f]{40})\s+(.+)`)
 	if err != nil {

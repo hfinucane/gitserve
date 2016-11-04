@@ -98,5 +98,5 @@ func main() {
 	}
 
 	http.HandleFunc("/blob/", servePath)
-	http.ListenAndServe(fmt.Sprintf("%s:%d", *address, *port), nil)
+	fmt.Println(http.ListenAndServe(fmt.Sprintf("%s:%d", *address, *port), nil))
 }
