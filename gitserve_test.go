@@ -138,18 +138,20 @@ func TestHttpTreeApi(t *testing.T) {
 	// If you go to http://server:port/blob/master, you might hope to get a file
 	// listing instead of a 404
 	for _, tc := range []struct {
-		Blob, Path      string
+		Path            string
 		ExpectedEntries []string
 	}{
 		// XXX FIXME Check branch name root too
-		{"rooted/tags/may/confuse", "/", []string{"gitserve.go", "gitserve_test.go"}},
-		{"2ccc6", "/", []string{"gitserve.go"}},
-		{"82fcd77642", "/a", []string{"b"}},
-		{"82fcd77642", "/a/", []string{"blob/82fcd77642/a/b"}},
-		{"82fcd77642", "/a/b", []string{"c/"}},
-		{"82fcd77642", "/a/b/c/", []string{"testfile"}},
+		{"/blob/master", []string{"gitserve.go", "gitserve_test.go"}},
+		{"/blob/master/", []string{"gitserve.go", "gitserve_test.go"}},
+		{"/blob/rooted/tags/may/confuse", []string{"gitserve.go", "gitserve_test.go"}},
+		{"/blob/2ccc6", []string{"gitserve.go"}},
+		{"/blob/82fcd77642/a", []string{"b"}},
+		{"/blob/82fcd77642/a/", []string{"blob/82fcd77642/a/b"}},
+		{"/blob/82fcd77642/a/b", []string{"c/"}},
+		{"/blob/82fcd77642/a/b/c/", []string{"testfile"}},
 	} {
-		req, err := http.NewRequest("GET", path.Join("/blob/", tc.Blob, tc.Path), nil)
+		req, err := http.NewRequest("GET", tc.Path, nil)
 		if err != nil {
 			t.Fatal("Test request failed", err)
 		}
@@ -157,12 +159,27 @@ func TestHttpTreeApi(t *testing.T) {
 		servePath(w, req)
 
 		listing := w.Body.String()
-		t.Log(path.Join("/blob/", tc.Blob, tc.Path))
+		t.Log(tc.Path)
 		for _, entry := range tc.ExpectedEntries {
 			if !strings.Contains(listing, entry) {
-				t.Fatal("Output not what we expected- missing ", entry, " from ", tc.Path, " @ ", tc.Blob, "got:\n", textSample(listing))
+				t.Fatal("Output not what we expected- missing ", entry, " from ", tc.Path, "got:\n", textSample(listing))
 			}
 		}
+	}
+}
+
+func TestStripTrailingSlash(t *testing.T) {
+	if p := stripTrailingSlash("foo"); p != "foo" {
+		t.Fatal(p)
+	}
+	if p := stripTrailingSlash("foo/"); p != "foo" {
+		t.Fatal(p)
+	}
+	if p := stripTrailingSlash("/"); p != "" {
+		t.Fatal(p)
+	}
+	if p := stripTrailingSlash(""); p != "" {
+		t.Fatal(p)
 	}
 }
 

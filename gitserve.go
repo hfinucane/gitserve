@@ -39,6 +39,14 @@ func pickLongestRef(url string, refs []string) (string, string, error) {
 	return "", "", fmt.Errorf("Could not find %q in %q", url, refs)
 }
 
+func stripTrailingSlash(input string) (output string) {
+	output = input
+	if len(input) > 0 && input[len(input)-1] == '/' {
+		output = input[:len(input)-1]
+	}
+	return output
+}
+
 func servePath(writer http.ResponseWriter, request *http.Request) {
 	refs, err := getRefs()
 	if err != nil {
@@ -48,8 +56,10 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	}
 	sort.Sort(lengthwise(refs))
 
+	stripped_path := stripTrailingSlash(request.URL.Path)
+
 	// Make sure we're in the right place doing the right thing
-	pathComponents := strings.Split(request.URL.Path, "/")
+	pathComponents := strings.Split(stripped_path, "/")
 	if pathComponents[0] != "" || pathComponents[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
@@ -58,7 +68,7 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	trimlen := len("/blob/")
 
 	// Pick from human readable refs
-	ref, path, err := pickLongestRef(request.URL.Path[trimlen:], refs)
+	ref, path, err := pickLongestRef(stripped_path[trimlen:], refs)
 
 	// If it isn't a ref, assume it's a hash literal
 	if err != nil {
@@ -66,7 +76,7 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 		path = strings.Join(pathComponents[3:], "/")
 	}
 
-	blob, err := getObject(ref, request.URL.Path, path)
+	blob, err := getObject(ref, stripped_path, path)
 
 	if err != nil {
 		writer.WriteHeader(http.StatusNotFound)
