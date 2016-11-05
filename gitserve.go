@@ -56,10 +56,10 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	}
 	sort.Sort(lengthwise(refs))
 
-	stripped_path := stripTrailingSlash(request.URL.Path)
+	strippedPath := stripTrailingSlash(request.URL.Path)
 
 	// Make sure we're in the right place doing the right thing
-	pathComponents := strings.Split(stripped_path, "/")
+	pathComponents := strings.Split(strippedPath, "/")
 	if pathComponents[0] != "" || pathComponents[1] != "blob" {
 		writer.WriteHeader(http.StatusNotFound)
 		return
@@ -68,7 +68,7 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 	trimlen := len("/blob/")
 
 	// Pick from human readable refs
-	ref, path, err := pickLongestRef(stripped_path[trimlen:], refs)
+	ref, path, err := pickLongestRef(strippedPath[trimlen:], refs)
 
 	// If it isn't a ref, assume it's a hash literal
 	if err != nil {
@@ -76,7 +76,7 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 		path = strings.Join(pathComponents[3:], "/")
 	}
 
-	blob, err := getObject(ref, stripped_path, path)
+	blob, err := getObject(ref, strippedPath, path)
 
 	if err != nil {
 		writer.WriteHeader(http.StatusNotFound)
