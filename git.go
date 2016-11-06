@@ -97,11 +97,22 @@ func gitList(hash, startingString string) ([]byte, error) {
 		return nil, err
 	}
 	t, err := template.New("list").Parse(`<html>
+	<head>
+	<style>
+	li.tree {
+		list-style: symbols(cyclic "📂");
+	}
+
+	li.blob {
+		list-style: symbols(cyclic "📝");
+	}
+	</style>
+	</head>
 	<body>
 	<ul>
 	{{ $prefix := .Prefix }}
 	{{- range $element := .Objects}}
-	<li><a href="{{$prefix}}/{{$element.Name}}{{ if eq $element.ObjectType "tree"}}/{{ end }}">{{$element.Name}}</a>
+	<li class="{{$element.ObjectType}}"><a href="{{$prefix}}/{{$element.Name}}{{ if eq $element.ObjectType "tree"}}/{{ end }}">{{$element.Name}}</a>
 	{{- end}}
 	</ul>
 	</body>
