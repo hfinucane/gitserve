@@ -48,11 +48,9 @@ func TestGetHumanNames(t *testing.T) {
 	// Check that remotes/origin/master exists
 	// This *is* a little dependent on where you get this from,
 	// so maybe I should build a little dedicated demo submodule ...
-	var rootedTag, zeroethTag, remoteMasterBranch bool = false, false, false
+	var rootedTag, zeroethTag bool = false, false
 	for _, ref := range refs {
-		if ref == "remotes/origin/master" {
-			remoteMasterBranch = true
-		} else if ref == "tags/0.0.0.0.1" {
+		if ref == "tags/0.0.0.0.1" {
 			zeroethTag = true
 		} else if ref == "tags/rooted/tags/are/tricky" {
 			rootedTag = true
@@ -62,8 +60,6 @@ func TestGetHumanNames(t *testing.T) {
 		t.Error("didn't find tags/rooted/tags/are/tricky")
 	} else if !zeroethTag {
 		t.Error("didn't find tags/0.0.0.0.1")
-	} else if !remoteMasterBranch {
-		t.Error("didn't find remotes/origin/master- this can be checkout dependent, sorry for the flaky test")
 	}
 }
 
@@ -142,8 +138,8 @@ func TestHttpTreeApi(t *testing.T) {
 		ExpectedEntries []string
 	}{
 		// XXX FIXME Check branch name root too
-		{"/blob/master", []string{"gitserve.go", "gitserve_test.go"}},
-		{"/blob/master/", []string{"gitserve.go", "gitserve_test.go"}},
+		{"/blob/HEAD", []string{"gitserve.go", "gitserve_test.go"}},
+		{"/blob/HEAD/", []string{"gitserve.go", "gitserve_test.go"}},
 		{"/blob/rooted/tags/may/confuse", []string{"gitserve.go", "gitserve_test.go"}},
 		{"/blob/2ccc6", []string{"gitserve.go"}},
 		{"/blob/82fcd77642/a", []string{"b"}},
