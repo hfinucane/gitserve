@@ -5,4 +5,5 @@ go:
 
 script:
 - go test -v
+- go vet
 - go build
