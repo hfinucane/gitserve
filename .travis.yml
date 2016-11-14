@@ -1,9 +1,15 @@
 language: go
-
 go:
 - 1.7
-
 script:
 - go test -v
 - go vet
-- go build
+- go build -a -tags netgo -installsuffix netgo
+deploy:
+  provider: releases
+  api_key:
+    secure: bduKgqnZsFbAVRl2BPd9G8N75kRcTbN9V1Fiw4dq5BKUA14MkMGYOjweRvapeTsgvcpF9Iciim1ZLYotla6TwOriQ5yTQr8lU9yhURsihQ0JaqsstUOR57yBku2dXerBj7p4TzmV5isNiG+jSUOLCgq4VD8UHZbUuVu79rHqbS3uDpjmCMb5jm5Dvoq8LMpMf9NnxKPXhSky8C6keEVDwmqI0ZHq3qW70OhW4qIOaBZrh9wRzS0qrYGivxNM59aHhwWSZfna8vf9HcW6WQMBx/Hx7E901tzoMBeFHKltgpsgmkND7Y8BJ/K0QEdEFX/0ta4+PyC1s8luTrHbv7QYTzjvlF8RS4qV7C+MqNHYfpl4L7BYXBawJuYpJD1jCNHz0YP3uieqmbcYZbW4G9L52hxYpkwG0ORd+dHWF2WAgUkw3wkR5U/1lZ5zhPHtXWN6UqZcDxCOQkw8sofNcNeYflI1Yehfow55aArr0+EkWatO6xFcgHcKOQLFIELyqXH0iz3QhrNyxSsSeo2xZOWg5wj/I4a7QqENUHx5wTtem04TdyPgF8hIzeWPD6/tudbXdYYB6sYE4EjcXvw5pOXgMc1E/oQaiQgXpvphO4piynZDQxOBpXE6s/FiRcw12jg3qC9HLQmgPlqR9dVLQp/i7kp5gr6EWNvKNlArGhz1Tcg=
+  file: gitserve
+  on:
+    repo: hfinucane/gitserve
+    tags: true
