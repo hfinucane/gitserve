@@ -118,5 +118,8 @@ func main() {
 	}
 
 	http.HandleFunc("/blob/", servePath)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/blob/", 301)
+	})
 	fmt.Println(http.ListenAndServe(fmt.Sprintf("%s:%d", *address, *port), nil))
 }
