@@ -138,6 +138,7 @@ func TestHttpTreeApi(t *testing.T) {
 		ExpectedEntries []string
 	}{
 		// XXX FIXME Check branch name root too
+		{"/blob/", []string{"refs/heads", "master"}},
 		{"/blob/HEAD", []string{"gitserve.go", "gitserve_test.go"}},
 		{"/blob/HEAD/", []string{"gitserve.go", "gitserve_test.go"}},
 		{"/blob/rooted/tags/may/confuse", []string{"gitserve.go", "gitserve_test.go"}},
@@ -161,6 +162,17 @@ func TestHttpTreeApi(t *testing.T) {
 				t.Fatal("Output not what we expected- missing ", entry, " from ", tc.Path, "got:\n", textSample(listing))
 			}
 		}
+	}
+}
+
+func TestEntryURLs(t *testing.T) {
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Fatal("Test failed", req, err)
+	}
+	req, err = http.NewRequest("GET", "/blob/", nil)
+	if err != nil {
+		t.Fatal("Test failed", req, err)
 	}
 }
 

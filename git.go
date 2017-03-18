@@ -132,6 +132,32 @@ func gitList(hash, startingString string) ([]byte, error) {
 	return buf.Bytes(), err
 }
 
+func refList(refs []string) ([]byte, error) {
+	t, err := template.New("list").Parse(`<html>
+	<head>
+	</head>
+	<body>
+	<ul>
+	{{- range $ref := .Refs}}
+	<li class="ref"><a href="/blob/{{$ref}}/">{{$ref}}</a>
+	{{- end}}
+	</ul>
+	</body>
+	</html>`)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	var data = struct {
+		Refs []string
+	}{refs}
+	err = t.Execute(&buf, data)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), err
+}
+
 func lstree(commit string) ([]GitObject, error) {
 	// Inspect the cwd
 	cmd := exec.Command("git", "ls-tree", commit)
