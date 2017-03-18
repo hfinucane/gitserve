@@ -67,6 +67,16 @@ func servePath(writer http.ResponseWriter, request *http.Request) {
 
 	trimlen := len("/blob/")
 
+	if strippedPath == "/blob" {
+		// Let's list out refs and dip
+		index, err := refList(refs)
+		if err != nil {
+			fmt.Printf("%q", err)
+		}
+		writer.Write(index)
+		return
+	}
+
 	// Pick from human readable refs
 	ref, path, err := pickLongestRef(strippedPath[trimlen:], refs)
 
@@ -108,5 +118,8 @@ func main() {
 	}
 
 	http.HandleFunc("/blob/", servePath)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/blob/", 301)
+	})
 	fmt.Println(http.ListenAndServe(fmt.Sprintf("%s:%d", *address, *port), nil))
 }
